@@ -6,6 +6,7 @@ using Domain.Pay.Services.CommandHandlers.Interfaces;
 using Domain.Pay.Services.Commands.Payments;
 using Integration.Pay.Dto;
 using Integration.Pay.Interfaces;
+using Integration.Pay.Service;
 using Repository.Pay.UnitOfWork;
 using System;
 using System.Linq;
@@ -20,13 +21,16 @@ namespace Domain.Pay.Services.CommandHandlers
         readonly IMapper _mapper;
         readonly IPayAtOperatorService _payAtOperatorService;
         readonly IWebHook _webHook;
+        readonly IKafkaProducer _kafkaProducer;
 
-        public CriarPaymentHandler(IUnitOfWork unitOfWork, IMapper mapper, IWebHook webHook, IPayAtOperatorService payAtOperatorService)
+        public CriarPaymentHandler(IUnitOfWork unitOfWork, IMapper mapper, IWebHook webHook, 
+            IPayAtOperatorService payAtOperatorService, KafkaProducer kafkaProducer)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
             _payAtOperatorService = payAtOperatorService;
             _webHook = webHook;
+            _kafkaProducer = kafkaProducer;
         }
 
         public async Task<ResponseResult> Handle(CriarPaymentCommand request)
@@ -39,7 +43,11 @@ namespace Domain.Pay.Services.CommandHandlers
             await CallMockApi(request);
             // Chama  WebHook retornando o status do pagamento
             request.Status = 2;
-            await CallWebHook(request);
+
+
+            //await CallWebHook(request);
+            await CallKafkaProducer(request);
+
             // retorna a operação para Controller
             return _response;
         }
@@ -79,9 +87,30 @@ namespace Domain.Pay.Services.CommandHandlers
             });
         }
 
-        async Task CallWebHook(CriarPaymentCommand request)
+        //async Task CallWebHook(CriarPaymentCommand request)
+        //{
+        //    var result = await _webHook.CallPostMethod(new WebHookMethodRequestDto
+        //    {
+        //        PayId = request.PayId,
+        //        CreatedAt = request.CreatedAt,
+        //        Name = request.Name,
+        //        Bandeira = request.Bandeira,
+        //        NumeroCartao = request.NumeroCartao,
+        //        Vencimento = request.Vencimento,
+        //        CodigoSeguranca = request.CodigoSeguranca,
+        //        Valor = (decimal)request.Valor,
+        //        Status = request.Status
+        //    });
+        //    if (result.StatusCode != HttpStatusCode.OK)
+        //    {
+        //        request.AddNotification("", result.ContentResult);
+        //        _response.AddNotifications(request.Notifications);
+        //    }
+        //}
+
+        async Task CallKafkaProducer(CriarPaymentCommand request)
         {
-            var result = await _webHook.CallPostMethod(new WebHookMethodRequestDto
+            var result = await _kafkaProducer.RealizarPagamento(new MethodRequestDto
             {
                 PayId = request.PayId,
                 CreatedAt = request.CreatedAt,
@@ -93,9 +122,9 @@ namespace Domain.Pay.Services.CommandHandlers
                 Valor = (decimal)request.Valor,
                 Status = request.Status
             });
-            if (result.StatusCode != HttpStatusCode.OK)
+            if (result.Status == Confluent.Kafka.PersistenceStatus.NotPersisted)
             {
-                request.AddNotification("", result.ContentResult);
+                request.AddNotification("", result.Message.Value);
                 _response.AddNotifications(request.Notifications);
             }
         }

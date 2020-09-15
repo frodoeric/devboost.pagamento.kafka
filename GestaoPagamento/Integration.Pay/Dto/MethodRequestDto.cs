@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Integration.Pay.Dto
 {
-    public class WebHookMethodRequestDto
+    public class MethodRequestDto
     {
         [JsonPropertyName("payId")]
         public Guid PayId { get; set; }

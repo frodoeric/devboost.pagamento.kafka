@@ -19,9 +19,10 @@ namespace Consumer.Drone.AzureFunction
         readonly string _userToken;
         readonly string _passwordToken;
 
-        readonly IPedidoService _pedidoService;
         readonly IAutorizationService _autorizationService;
         readonly IConfiguration _configuration;
+        readonly IPedidoService _pedidoService;
+        readonly IPagamentoService _pagamentoService;
 
         public QueueDeliveryBindFunction()
         {
@@ -64,6 +65,19 @@ namespace Consumer.Drone.AzureFunction
             var valuePedido = kafkaEvent.Value.ToString();
             logger.LogInformation(valuePedido);
             _pedidoService.RealizarPedido(Token, valuePedido).Wait();
+        }
+
+        [FunctionName(nameof(PagamentoConsumer))]
+        public void PagamentoConsumer([KafkaTrigger(
+            "omv.serveblog.net:29092",
+            "devboost.delivery.pagamento.kafka",
+            ConsumerGroup = "AtualziarPagamento",
+            Protocol = BrokerProtocol.Plaintext)] KafkaEventData<string> kafkaEvent,
+            ILogger logger)
+        {
+            var valueStatusPagamento = kafkaEvent.Value.ToString();
+            logger.LogInformation(valueStatusPagamento);
+            _pagamentoService.AtualizaStatusPedido(Token, valueStatusPagamento).Wait();
         }
     }
 }

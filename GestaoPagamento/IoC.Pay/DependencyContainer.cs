@@ -31,8 +31,13 @@ namespace IoC.Pay
                 options.UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()));
         }
 
-        public static void RegisterServices(this IServiceCollection services, bool mock = false)
+        public static void RegisterServices(this IServiceCollection services, IConfiguration configuration, bool mock = false)
         {
+            var host = configuration["Kafka:host"];
+            var topic = configuration["Kafka:topic"];
+            int.TryParse(configuration["Kafka:port"], out int port);
+
+            services.AddScoped<IKafkaProducer>(x => new KafkaProducer(host, port, topic));
             services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
             services.AddDbContext<IPaymentDbContext, PaymentDbContext>(ServiceLifetime.Scoped);
             services.AddScoped(typeof(IRepository<>), typeof(EfRepository<>));
